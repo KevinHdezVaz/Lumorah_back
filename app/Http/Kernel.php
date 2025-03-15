@@ -6,14 +6,7 @@ use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Http\Kernel as HttpKernel;
 
 class Kernel extends HttpKernel
-{
-    /**
-     * The application's global HTTP middleware stack.
-     *
-     * These middleware are run during every request to your application.
-     *
-     * @var array<int, class-string|string>
-     */
+{ 
     protected $middleware = [
         // \App\Http\Middleware\TrustHosts::class,
         \App\Http\Middleware\TrustProxies::class,
@@ -25,15 +18,10 @@ class Kernel extends HttpKernel
     ];
 
     protected function schedule(Schedule $schedule)
-{
-    $schedule->command('bookings:update-statuses')->everyMinute();
-}
+    {
+        $schedule->command('bookings:update-statuses')->everyMinute();
+    }
 
-    /**
-     * The application's route middleware groups.
-     *
-     * @var array<string, array<int, class-string|string>>
-     */
     protected $middlewareGroups = [
         'web' => [
             \App\Http\Middleware\EncryptCookies::class,
@@ -73,7 +61,6 @@ class Kernel extends HttpKernel
         'firebase.auth' => \App\Http\Middleware\VerifyFirebaseToken::class,
         'auth:admin' => \App\Http\Middleware\AdminAuthenticate::class,
         'mp.webhook' => \App\Http\Middleware\ValidateMercadoPagoWebhook::class,
-
-
+        'role' => \App\Http\Middleware\CheckRole::class, // Añadido aquí
     ];
 }
