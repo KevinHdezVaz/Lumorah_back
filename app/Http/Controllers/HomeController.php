@@ -3,73 +3,67 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use App\Models\User;
-use App\Models\Equipo;
-use App\Models\DailyMatch;
-use App\Models\Field;
 
 class HomeController extends Controller
 {
     public function home(Request $request)
     {
         $monthLabels = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
-        
-        $monthlyUsers = User::selectRaw('MONTH(created_at) as month, COUNT(*) as count')
-            ->whereYear('created_at', now()->year)
-            ->groupBy('month')
-            ->pluck('count', 'month')
-            ->toArray();
-            
-        $monthlyTeams = Equipo::selectRaw('MONTH(created_at) as month, COUNT(*) as count')
-            ->whereYear('created_at', now()->year)
-            ->groupBy('month')
-            ->pluck('count', 'month')
-            ->toArray();
 
-        $userData = array_map(function($month) use ($monthlyUsers) {
-            return $monthlyUsers[$month] ?? 0;
-        }, range(1, 12));
+        // Datos estáticos de usuarios y equipos creados por mes
+        $userData = [5, 8, 12, 6, 9, 15, 20, 18, 10, 7, 5, 4];
+        $teamData = [2, 3, 5, 1, 6, 4, 7, 8, 5, 3, 2, 1];
 
-        $teamData = array_map(function($month) use ($monthlyTeams) {
-            return $monthlyTeams[$month] ?? 0;
-        }, range(1, 12));
+        // Partidos por día de la semana (simulado)
+        $matchesByDay = collect([
+            ['date' => now()->startOfWeek()->toDateString(), 'count' => 2],
+            ['date' => now()->startOfWeek()->addDay()->toDateString(), 'count' => 3],
+            ['date' => now()->startOfWeek()->addDays(2)->toDateString(), 'count' => 1],
+            ['date' => now()->startOfWeek()->addDays(3)->toDateString(), 'count' => 4],
+            ['date' => now()->startOfWeek()->addDays(4)->toDateString(), 'count' => 2],
+        ]);
 
-        $matchesByDay = DailyMatch::selectRaw('DATE(schedule_date) as date, COUNT(*) as count')
-            ->whereBetween('schedule_date', [now()->startOfWeek(), now()->endOfWeek()])
-            ->groupBy('date')
-            ->orderBy('date')
-            ->get();
+        // Porcentaje de canchas ocupadas (simulado)
+        $totalFields = 10;
+        $occupiedFields = 6;
+        $occupationPercentage = ($totalFields > 0) ? ($occupiedFields / $totalFields) * 100 : 0;
 
-        $totalFields = Field::count();
-        $occupiedFields = DailyMatch::whereDate('schedule_date', now()->today())->distinct('field_id')->count('field_id');
-        $occupationPercentage = $totalFields ? ($occupiedFields / $totalFields) * 100 : 0;
+        // Partidos jugados este mes (simulado)
+        $matchesPlayedThisMonth = 22;
 
-        $matchesPlayedThisMonth = DailyMatch::whereMonth('schedule_date', now()->month)->count();
+        // Lista de partidos (simulado)
+        $matches = collect([
+            [
+                'schedule_date' => now()->toDateString(),
+                'start_time' => '18:00',
+                'field' => 'Cancha 1',
+                'teams' => ['Equipo A', 'Equipo B'],
+                'status' => 'pendiente'
+            ],
+            // ... más partidos simulados
+        ]);
 
-        $matches = DailyMatch::with(['field', 'teams'])
-            ->when($request->date, function ($query) use ($request) {
-                $query->whereDate('schedule_date', $request->date);
-            })
-            ->when($request->status, function ($query) use ($request) {
-                $query->where('status', $request->status);
-            })
-            ->orderBy('schedule_date', 'desc')
-            ->orderBy('start_time', 'asc')
-            ->paginate(10);
+        // Próximos partidos (simulado)
+        $upcomingMatches = collect([
+            [
+                'schedule_date' => now()->addDay()->toDateString(),
+                'start_time' => '19:00',
+                'field' => 'Cancha 2',
+                'teams' => ['Equipo C', 'Equipo D'],
+                'status' => 'pendiente'
+            ],
+        ]);
 
-        $upcomingMatches = DailyMatch::with(['field', 'teams'])
-            ->whereDate('schedule_date', '>=', now()->today())
-            ->whereDate('schedule_date', '<=', now()->tomorrow())
-            ->orderBy('schedule_date', 'asc')
-            ->orderBy('start_time', 'asc')
-            ->take(5)
-            ->get();
-
-        $fields = Field::all(); // Para el mapa (opcional)
+        // Lista de canchas (simulado)
+        $fields = collect([
+            ['id' => 1, 'name' => 'Cancha 1'],
+            ['id' => 2, 'name' => 'Cancha 2'],
+            ['id' => 3, 'name' => 'Cancha 3'],
+        ]);
 
         return view('dashboard', [
-            'newUsersCount' => User::whereMonth('created_at', now()->month)->count(),
-            'newTeamsCount' => Equipo::whereMonth('created_at', now()->month)->count(),
+            'newUsersCount' => 8,
+            'newTeamsCount' => 3,
             'monthLabels' => $monthLabels,
             'userData' => $userData,
             'teamData' => $teamData,

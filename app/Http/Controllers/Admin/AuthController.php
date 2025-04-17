@@ -18,21 +18,19 @@ class AuthController extends Controller
     public function store()
     {
         $attributes = request()->validate([
-            'email'=>'required|email',
-            'password'=>'required' 
+            'email' => 'required|email',
+            'password' => 'required'
         ]);
-
-        if(Auth::attempt($attributes))
-        {
+        dd($attributes);
+        if (Auth::guard('admin')->attempt($attributes)) {
             session()->regenerate();
-            return redirect('dashboard')->with(['success'=>'You are logged in.']);
-        }
-        else{
+            dd(Auth::guard('admin')->user());
 
-            return back()->withErrors(['email'=>'Email or password invalid.']);
+            return redirect('dashboard')->with(['success' => 'Has iniciado sesión correctamente.']);
+        } else {
+            return back()->withErrors(['email' => 'Correo o contraseña inválidos.']);
         }
     }
-    
 
     // Manejar el logout para el admin
     public function logout(Request $request)

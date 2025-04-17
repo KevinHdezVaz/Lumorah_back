@@ -5,20 +5,22 @@ use App\Http\Controllers\HomeController;
 use App\Http\Controllers\ResetController;
 use App\Http\Controllers\StoryController;
 use App\Http\Controllers\BannerController;
+use App\Http\Controllers\PremioController;
 use App\Http\Controllers\BillingController;
 use App\Http\Controllers\SettingController;
 use App\Http\Controllers\InfoUserController;
 use App\Http\Controllers\RegisterController;
 use App\Http\Controllers\SessionsController;
 use App\Http\Controllers\API\FieldController;
+use App\Http\Controllers\PromocionController;
 use App\Http\Controllers\DailyMatchController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\VerificationController;
 use App\Http\Controllers\ProductTiendaController;
 use App\Http\Controllers\Torneo\TorneoController;
 use App\Http\Controllers\ChangePasswordController;
 use App\Http\Controllers\UserManagementController;
 use App\Http\Controllers\FieldManagementController;
-use App\Http\Controllers\VerificationController;
 
 // Rutas públicas/guest
 Route::middleware(['guest'])->group(function () {
@@ -47,29 +49,7 @@ Route::get('/.well-known/assetlinks.json', function () {
         ]
     ]);
 });
-
  
-Route::get('/partido/{id}', function ($id) {
-    $deepLink = "miapp://partido/$id";
-    $androidFallbackUrl = "https://play.google.com/store/apps/details?id=com.app.footconnect0";
-    $iosFallbackUrl = "https://apps.apple.com/app/idTU_APPLE_ID"; // Reemplaza con tu Apple App ID cuando lo tengas
-
-    // Detectar el dispositivo del usuario
-    $userAgent = request()->header('User-Agent');
-    
-    if (str_contains($userAgent, 'Android') || str_contains($userAgent, 'iPhone') || str_contains($userAgent, 'iPad')) {
-        // Intentar redirigir al deep link
-        return redirect($deepLink);
-    } else {
-        // Si no es un dispositivo móvil, mostrar una vista con opciones
-        return view('match_preview', [
-            'matchId' => $id,
-            'androidFallbackUrl' => $androidFallbackUrl,
-            'iosFallbackUrl' => $iosFallbackUrl,
-            'deepLink' => $deepLink
-        ]);
-    }
-})->name('partido.link');
 
 // Rutas protegidas para admin
 Route::middleware(['auth:admin'])->group(function () {
@@ -93,7 +73,10 @@ Route::middleware(['auth:admin'])->group(function () {
     Route::post('/banner', [BannerController::class, 'store'])->name('banner.store');
     Route::delete('/banner/{id}', [BannerController::class, 'destroy'])->name('banner.destroy');
 
-    
+    //new
+    Route::resource('promociones', PromocionController::class)->only(['index', 'create', 'store', 'destroy']);
+    Route::resource('premios', PremioController::class)->only(['index', 'create', 'store', 'destroy']);
+
     
     Route::get('/billing', [BillingController::class, 'index'])->name('payments'); // Nueva ruta para pagos
     

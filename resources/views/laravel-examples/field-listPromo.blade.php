@@ -7,9 +7,9 @@
             <div class="card mb-4">
                 <div class="card-header pb-0">
                     <div class="d-flex justify-content-between align-items-center">
-                        <h6>Bonos</h6>
-                        <a href="{{ route('bonos.create') }}" class="btn bg-gradient-primary">
-                            Nuevo Bono
+                        <h6>Promociones</h6>
+                        <a href="{{ route('promociones.create') }}" class="btn bg-gradient-primary">
+                            Nueva Promoción
                         </a>
                     </div>
                 </div>
@@ -19,65 +19,58 @@
                             {{ session('success') }}
                         </div>
                     @endif
-                    
                     <div class="table-responsive p-0">
                         <table class="table align-items-center mb-0">
                             <thead>
                                 <tr>
                                     <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Título</th>
-                                    <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Tipo</th>
-                                    <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Precio</th>
-                                    <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Duración (días)</th>
+                                    <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Imagen</th>
+                                    <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Puntos por Ticket</th>
                                     <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Estado</th>
-                                    <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Fecha Creación</th>
+                                    <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Fecha de Creación</th>
                                     <th class="text-secondary opacity-7">Acciones</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                @foreach($bonos as $bono)
+                                @foreach($promociones as $promocion)
                                     <tr>
                                         <td>
                                             <div class="d-flex px-2 py-1">
-                                                @if($bono->image_path)
-                                                    <div>
-                                                        <img src="{{ $bono->image_path }}" class="avatar avatar-sm me-3" alt="Bono Image">
-                                                    </div>
-                                                @endif
                                                 <div class="d-flex flex-column justify-content-center">
-                                                    <h6 class="mb-0 text-sm">{{ $bono->titulo }}</h6>
+                                                    <h6 class="mb-0 text-sm">{{ $promocion->titulo }}</h6>
                                                 </div>
                                             </div>
                                         </td>
                                         <td>
-                                            <p class="text-xs font-weight-bold mb-0">{{ $bono->tipo }}</p>
+                                            <div class="d-flex px-2 py-1">
+                                                @if($promocion->imagen)
+                                                    <img src="{{ Storage::url($promocion->imagen) }}" class="avatar avatar-sm me-3" alt="Imagen Promoción">
+                                                @else
+                                                    <span class="text-xs font-weight-bold">Sin imagen</span>
+                                                @endif
+                                            </div>
                                         </td>
                                         <td>
-                                            <p class="text-xs font-weight-bold mb-0">${{ number_format($bono->precio, 2) }}</p>
+                                            <p class="text-xs font-weight-bold mb-0">{{ $promocion->puntos_por_ticket }}</p>
                                         </td>
                                         <td>
-                                            <p class="text-xs font-weight-bold mb-0">{{ $bono->duracion_dias }}</p>
-                                        </td>
-                                        <td>
-                                            <span class="badge badge-sm {{ $bono->is_active ? 'bg-gradient-success' : 'bg-gradient-secondary' }}">
-                                                {{ $bono->is_active ? 'Activo' : 'Inactivo' }}
+                                            <span class="badge badge-sm {{ $promocion->estado == 'activa' ? 'bg-success' : ($promocion->estado == 'expirada' ? 'bg-danger' : 'bg-warning') }}">
+                                                {{ ucfirst($promocion->estado) }}
                                             </span>
                                         </td>
                                         <td>
                                             <span class="text-secondary text-xs font-weight-bold">
-                                                {{ \Carbon\Carbon::parse($bono->created_at)->format('d/m/Y') }}
+                                                {{ \Carbon\Carbon::parse($promocion->created_at)->format('d/m/Y') }}
                                             </span>
                                         </td>
                                         <td class="align-middle">
-                                            <a href="{{ route('bonos.edit', $bono->id) }}" class="btn btn-link text-info px-3 mb-0">
-                                                <i class="fas fa-edit"></i>
-                                            </a>
-                                            <form action="{{ route('bonos.destroy', $bono->id) }}" 
+                                            <form action="{{ route('promociones.destroy', $promocion->id) }}" 
                                                   method="POST" class="d-inline">
                                                 @csrf
                                                 @method('DELETE')
                                                 <button type="submit" 
                                                         class="btn btn-link text-danger text-gradient px-3 mb-0"
-                                                        onclick="return confirm('¿Está seguro de eliminar este bono?')">
+                                                        onclick="return confirm('¿Está seguro de eliminar esta promoción?')">
                                                     <i class="far fa-trash-alt"></i>
                                                 </button>
                                             </form>

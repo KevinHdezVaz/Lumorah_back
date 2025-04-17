@@ -178,64 +178,41 @@ use App\Models\DailyMatch;
                                 </tr>
                             </thead>
                             <tbody>
-                                @forelse ($matches as $match)
-                                    <tr class="{{ $match->status == 'full' ? 'bg-light text-muted' : '' }}">
-                                        <td>
-                                            <span class="text-xs font-weight-bold">{{ $match->name }}</span>
-                                        </td>
-                                        <td>
-                                            <span class="text-xs font-weight-bold">{{ $match->field->name ?? 'Sin cancha' }}</span>
-                                        </td>
-                                        <td>
-                                            <span class="text-xs font-weight-bold">{{ $match->schedule_date->format('d/m/Y') }}</span>
-                                        </td>
-                                        <td>
-                                            <span class="text-xs font-weight-bold">{{ $match->start_time }} - {{ $match->end_time }}</span>
-                                        </td>
-                                        <td>
-                                            <span class="badge badge-sm {{ $match->status == 'full' ? 'bg-secondary' : 'bg-success' }}">
-                                                {{ $match->status == 'full' ? 'Completo' : 'Disponible' }}
-                                            </span>
-                                        </td>
-                                    </tr>
-                                @empty
-                                    <tr>
-                                        <td colspan="6" class="text-center">No hay partidos disponibles</td>
-                                    </tr>
-                                @endforelse
-                            </tbody>
+    @forelse ($matches as $match)
+        <tr class="{{ $match['status'] == 'full' ? 'bg-light text-muted' : '' }}">
+            <td>
+                <span class="text-xs font-weight-bold">{{ $match['field'] }}</span> <!-- Fix: Use $match['field'] -->
+            </td>
+            <td>
+                <span class="text-xs font-weight-bold">{{ $match['field'] ?? 'Sin cancha' }}</span>
+            </td>
+            <td>
+                <span class="text-xs font-weight-bold">{{ \Carbon\Carbon::parse($match['schedule_date'])->format('d/m/Y') }}</span>
+            </td>
+            <td>
+                <span class="text-xs font-weight-bold">{{ $match['start_time'] }} - {{ $match['end_time'] ?? '' }}</span>
+            </td>
+            <td>
+                <span class="badge badge-sm {{ $match['status'] == 'full' ? 'bg-secondary' : 'bg-success' }}">
+                    {{ $match['status'] == 'full' ? 'Completo' : 'Disponible' }}
+                </span>
+            </td>
+        </tr>
+    @empty
+        <tr>
+            <td colspan="6" class="text-center">No hay partidos disponibles</td>
+        </tr>
+    @endforelse
+</tbody>
                         </table>
                     </div>
-                    <div class="d-flex justify-content-center mt-3">
-                        {{ $matches->links() }}
-                    </div>
+                   
                 </div>
             </div>
         </div>
     </div>
 
-    <div class="row mt-4">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header pb-0">
-                    <h6>Próximos Partidos (Hoy y Mañana)</h6>
-                </div>
-                <div class="card-body p-3">
-                    <ul class="list-group">
-                        @forelse ($upcomingMatches as $match)
-                            <li class="list-group-item">
-                                <span class="font-weight-bold">{{ $match->name }}</span> - 
-                                {{ $match->schedule_date->format('d/m/Y') }} a las {{ $match->start_time }} 
-                                (Cancha: {{ $match->field->name ?? 'Sin cancha' }})
-                            </li>
-                        @empty
-                            <li class="list-group-item text-center">No hay partidos próximos</li>
-                        @endforelse
-                    </ul>
-                </div>
-            </div>
-        </div>
-    </div>
+   
 
     <div class="row mt-4">
     <div class="col-12">
@@ -321,18 +298,7 @@ window.onload = function() {
         }
     });
 
-    // Mapa de Canchas
-    document.addEventListener('DOMContentLoaded', function() {
-        var map = L.map('map').setView([-34.6037, -58.3816], 13); // Ejemplo: Buenos Aires
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            maxZoom: 19,
-        }).addTo(map);
-
-        @foreach ($fields as $field)
-            L.marker([{{ $field->latitude ?? -34.6037 }}, {{ $field->longitude ?? -58.3816 }}]).addTo(map)
-                .bindPopup('{{ $field->name }} - {{ $field->address ?? 'Sin dirección' }}');
-        @endforeach
-    });
+    
 };
 </script>
 @endpush
