@@ -3,34 +3,25 @@
 namespace App\Models;
 
 use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Notifications\Notifiable;
+use Laravel\Sanctum\HasApiTokens;
+use Illuminate\Database\Eloquent\Factories\HasFactory; // Añadido para factories
 
 class Usuario extends Authenticatable
 {
+    use HasApiTokens, Notifiable;  
     protected $table = 'usuarios';
 
     protected $fillable = [
         'nombre',
         'email',
-        'contraseña',
-        'saldo_puntos',
+        'password', // Asegúrate que coincida con tus campos de base de datos
     ];
 
     protected $hidden = [
-        'contraseña',
+        'password',
+        'remember_token',
+        'email_verified_at', // Ocultar campos sensibles
     ];
-
-    public function tickets()
-    {
-        return $this->hasMany(Ticket::class, 'usuario_id');
-    }
-
-    public function canjesPremios()
-    {
-        return $this->hasMany(CanjePremio::class, 'usuario_id');
-    }
-
-    public function transaccionesPuntos()
-    {
-        return $this->hasMany(TransaccionPuntos::class, 'usuario_id');
-    }
+ 
 }

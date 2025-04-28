@@ -1,12 +1,11 @@
 <?php
 
-use App\Models\User;
+use App\Models\Usuario;
 use App\Models\Administrator;
 
 return [
-
     'defaults' => [
-        'guard' => 'web', // Guard por defecto
+        'guard' => 'web',
         'passwords' => 'users',
     ],
 
@@ -16,7 +15,12 @@ return [
             'provider' => 'users',
         ],
 
-        'admin' => [ // Nuevo guard para administradores
+        'api' => [ // Nuevo guard para la API
+            'driver' => 'passport',
+            'provider' => 'users',
+        ],
+
+        'admin' => [
             'driver' => 'session',
             'provider' => 'admins',
         ],
@@ -25,10 +29,10 @@ return [
     'providers' => [
         'users' => [
             'driver' => 'eloquent',
-            'model' => App\Models\User::class,
+            'model' => App\Models\Usuario::class, // Cambiamos de User a Usuario
         ],
 
-        'admins' => [ // Nuevo provider para administradores
+        'admins' => [
             'driver' => 'eloquent',
             'model' => App\Models\Administrator::class,
         ],
@@ -42,7 +46,7 @@ return [
             'throttle' => 60,
         ],
 
-        'admins' => [ // Nuevo password reset para administradores
+        'admins' => [
             'provider' => 'admins',
             'table' => 'password_reset_tokens',
             'expire' => 60,
@@ -51,5 +55,4 @@ return [
     ],
 
     'password_timeout' => 10800,
-
 ];
