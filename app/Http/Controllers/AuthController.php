@@ -55,27 +55,45 @@ class AuthController extends Controller
         }
     }
 
+    public function profile(Request $request)
+    {
+        try {
+            $user = $request->user();
+            return response()->json([
+                'id' => $user->id,
+                'nombre' => $user->nombre,
+                'email' => $user->email,
+            ], 200);
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => 'Error al obtener el perfil',
+                'message' => $e->getMessage(),
+            ], 500);
+        }
+    }
+    
     public function login(Request $request)
     {
         $validator = Validator::make($request->all(), [
             'email' => 'required|string|email',
             'password' => 'required|string',
         ]);
-
+    
         if ($validator->fails()) {
             return response()->json(['error' => $validator->errors()], 422);
         }
-
+    
         $user = Usuario::where('email', $request->email)->first();
-
-        if (!$user || !password_verify($request->password, $user->password)) {
+    
+        if (!$user || !Hash::check($request->password, $user->password)) {
             return response()->json(['error' => 'Credenciales inválidas'], 401);
         }
-
-        $token = $user->createToken('auth_token')->accessToken;
-
+    
+        $tokenResult = $user->createToken('auth_token');
+        $plainTextToken = $tokenResult->plainTextToken;
+    
         return response()->json([
-            'token' => $token,
+            'token' => $plainTextToken,
             'user' => $user,
         ], 200);
     }
