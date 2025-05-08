@@ -5,23 +5,28 @@ namespace App\Models;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
-use Illuminate\Database\Eloquent\Factories\HasFactory; // Añadido para factories
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class Usuario extends Authenticatable
 {
-    use HasApiTokens, Notifiable;  
+    use HasApiTokens, Notifiable, HasFactory;
+
     protected $table = 'usuarios';
 
     protected $fillable = [
         'nombre',
         'email',
-        'password', // Asegúrate que coincida con tus campos de base de datos
+        'password',
+        'firebase_uid', // Añadido para Google Sign-In
     ];
 
     protected $hidden = [
         'password',
         'remember_token',
-        'email_verified_at', // Ocultar campos sensibles
+        'email_verified_at',
     ];
- 
+
+    protected $casts = [
+        'email_verified_at' => 'datetime',
+    ];
 }

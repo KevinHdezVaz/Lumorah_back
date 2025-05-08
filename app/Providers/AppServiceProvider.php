@@ -6,26 +6,26 @@ use Illuminate\Support\Facades\Log;
 use App\Services\MercadoPagoService;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\ServiceProvider;
+use Kreait\Firebase\Factory;
+use Kreait\Firebase\Contract\Auth as FirebaseAuth;
 
 class AppServiceProvider extends ServiceProvider
 {
-    /**
-     * Register any application services.
-     */
     public function register(): void
     {
         $this->app->singleton(MercadoPagoService::class, function ($app) {
             return new MercadoPagoService();
         });
-        
+
+        $this->app->singleton(FirebaseAuth::class, function ($app) {
+            $credentialsPath = config('firebase.credentials') ?? storage_path('app/firebase/lumorahai-891ad-firebase-adminsdk-fbsvc-645b8f2ba6.json');
+            $factory = (new Factory)->withServiceAccount($credentialsPath);
+            return $factory->createAuth();
+        });
     }
 
-    /**
-     * Bootstrap any application services.
-     */
     public function boot(): void
     {
-        // Crear directorios necesarios para el chat
         try {
             if (!Storage::disk('public')->exists('chat_images')) {
                 Storage::disk('public')->makeDirectory('chat_images');

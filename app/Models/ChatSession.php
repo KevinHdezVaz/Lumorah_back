@@ -16,8 +16,7 @@ class ChatSession extends Model
     protected $fillable = [
         'user_id', 
         'title',
-        'is_saved', // Añade este campo
-        'created_at',
+         'created_at',
         'updated_at'
     ];
 
@@ -30,8 +29,7 @@ class ChatSession extends Model
         'id',
         'user_id',
         'title',
-        'is_saved', // Añade este campo
-        'created_at',
+         'created_at',
         'updated_at'
     ];
 
@@ -41,8 +39,7 @@ class ChatSession extends Model
      * @var array
      */
     protected $casts = [
-        'is_saved' => 'boolean', // Esto convierte automáticamente 1/0 a true/false
-        'created_at' => 'datetime',
+         'created_at' => 'datetime',
         'updated_at' => 'datetime'
     ];
 
@@ -51,9 +48,7 @@ class ChatSession extends Model
      *
      * @var array
      */
-    protected $attributes = [
-        'is_saved' => false, // Valor por defecto (se guardará como 0 en la BD)
-    ];
+  
 
     public function messages()
     {
