@@ -9,7 +9,6 @@ Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/check-email', [AuthController::class, 'checkEmail']);
 Route::post('/check-phone', [AuthController::class, 'checkPhone']);
-
 Route::post('/google-login', [AuthController::class, 'googleLogin']);
 
 // Rutas de Google
@@ -21,13 +20,21 @@ Route::post('login/google', [AuthController::class, 'loginWithGoogle']);
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/profile', [AuthController::class, 'profile']);
     Route::post('/logout', [AuthController::class, 'logout']);
+    Route::post('/update-name', [ChatController::class, 'updateUserName']); // Nueva ruta para actualizar nombre
 
     Route::prefix('chat')->group(function () {
+        // Rutas existentes
         Route::get('/sessions', [ChatController::class, 'getSessions']);
         Route::post('/sessions', [ChatController::class, 'saveChatSession']);
-        Route::put('/sessions/{session}', [ChatController::class, 'saveSession']); // Corregido a 'saveSession'
-        Route::delete('/sessions/{session}', [ChatController::class, 'deleteSession']); // Nueva ruta para DELETE
+        Route::put('/sessions/{session}', [ChatController::class, 'saveSession']);
+        Route::delete('/sessions/{session}', [ChatController::class, 'deleteSession']);
         Route::get('/sessions/{session}/messages', [ChatController::class, 'getSessionMessages']);
+        
+        // Rutas de mensajería
         Route::post('/send-message', [ChatController::class, 'sendMessage']);
+        Route::post('/send-temporary-message', [ChatController::class, 'sendTemporaryMessage']); // Nueva ruta para mensajes temporales
+        
+        // Nueva ruta para iniciar sesión
+        Route::post('/start-new-session', [ChatController::class, 'startNewSession']);
     });
 });
