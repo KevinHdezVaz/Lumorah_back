@@ -13,37 +13,48 @@ use App\Services\LumorahAIService;
 class ChatController extends Controller
 {
     protected $lumorahService;
-    
+    protected $supportedLanguages = ['es', 'en', 'fr', 'pt'];
+
     public function __construct()
     {
         $this->middleware('auth:sanctum');
+    }
+
+    private function initializeService(Request $request)
+    {
+        $language = $request->input('language', 'es');
+        if (!in_array($language, $this->supportedLanguages)) {
+            $language = 'es'; // Fallback al español
+        }
         $this->lumorahService = new LumorahAIService(
             Auth::user()?->name,
-            'es'
+            $language
         );
     }
 
-    /**
-     * Obtener todas las sesiones de chat del usuario
-     */
-    public function getSessions()
+    public function getSessions(Request $request)
     {
         try {
-            $sessions = ChatSession::where('user_id', Auth::id())
-                ->orderBy('created_at', 'desc')
-                ->get()
-                ->map(function ($session) {
-                    return [
-                        'id' => $session->id,
-                        'user_id' => $session->user_id,
-                        'title' => $session->title,
-                        'is_saved' => (bool)$session->is_saved,
-                        'created_at' => $session->created_at->toDateTimeString(),
-                        'updated_at' => $session->updated_at->toDateTimeString(),
-                        'deleted_at' => $session->deleted_at?->toDateTimeString(),
-                    ];
-                });
-    
+            $query = ChatSession::where('user_id', Auth::id())
+                ->orderBy('created_at', 'desc');
+
+            // Filtrar por sesiones guardadas si se especifica
+            if ($request->query('saved', true)) {
+                $query->where('is_saved', true);
+            }
+
+            $sessions = $query->get()->map(function ($session) {
+                return [
+                    'id' => $session->id,
+                    'user_id' => $session->user_id,
+                    'title' => $session->title,
+                    'is_saved' => (bool)$session->is_saved,
+                    'created_at' => $session->created_at->toDateTimeString(),
+                    'updated_at' => $session->updated_at->toDateTimeString(),
+                    'deleted_at' => $session->deleted_at?->toDateTimeString(),
+                ];
+            });
+
             return response()->json([
                 'success' => true,
                 'data' => $sessions,
@@ -59,9 +70,6 @@ class ChatController extends Controller
         }
     }
 
-    /**
-     * Eliminar una sesión de chat
-     */
     public function deleteSession($sessionId)
     {
         DB::beginTransaction();
@@ -90,247 +98,470 @@ class ChatController extends Controller
         }
     }
 
-    /**
-     * Guardar una conversación explícitamente
-     */
     public function saveChatSession(Request $request)
     {
         $request->validate([
             'title' => 'required|string|max:100',
-            'messages' => 'required|array'
+            'messages' => 'required|array',
+            'messages.*.text' => 'required|string',
+            'messages.*.is_user' => 'required|boolean',
+            'messages.*.created_at' => 'required|date',
+            'session_id' => 'nullable|exists:chat_sessions,id',
         ]);
 
         DB::beginTransaction();
         try {
-            $session = ChatSession::create([
-                'user_id' => Auth::id(),
-                'title' => $request->title,
-                'is_saved' => true
-            ]);
+            $userId = Auth::id();
+            $sessionId = $request->session_id;
 
+            if ($sessionId) {
+                // Actualizar sesión existente
+                $session = ChatSession::where('id', $sessionId)
+                    ->where('user_id', $userId)
+                    ->firstOrFail();
+                $session->update([
+                    'title' => $request->title,
+                    'is_saved' => true,
+                ]);
+            } else {
+                // Crear nueva sesión
+                $session = ChatSession::create([
+                    'user_id' => $userId,
+                    'title' => $request->title,
+                    'is_saved' => true,
+                ]);
+            }
+
+            // Eliminar mensajes existentes si es una sesión existente
+            if ($sessionId) {
+                Message::where('chat_session_id', $sessionId)->delete();
+            }
+
+            // Guardar mensajes
             foreach ($request->messages as $msg) {
                 Message::create([
                     'chat_session_id' => $session->id,
-                    'user_id' => Auth::id(),
+'user_id' => $msg['is_user'] ? $userId : null, // Cambiado de 0 a null
                     'text' => $msg['text'],
                     'is_user' => $msg['is_user'],
-                    'created_at' => $msg['created_at'] ?? now(),
+                    'created_at' => $msg['created_at'],
+                    'updated_at' => $msg['created_at'],
                 ]);
             }
 
             DB::commit();
-            return response()->json($session, 201);
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'id' => $session->id,
+                    'user_id' => $session->user_id,
+                    'title' => $session->title,
+                    'is_saved' => $session->is_saved,
+                    'created_at' => $session->created_at->toDateTimeString(),
+                    'updated_at' => $session->updated_at->toDateTimeString(),
+                ],
+            ], 201);
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Error al guardar sesión: ' . $e->getMessage());
-            return response()->json(['error' => 'Error al guardar el chat'], 500);
+            return response()->json([
+                'success' => false,
+                'error' => 'Error al guardar el chat',
+                'message' => $e->getMessage(),
+            ], 500);
         }
     }
 
-    /**
-     * Obtener mensajes de una sesión específica
-     */
     public function getSessionMessages($sessionId)
     {
         try {
             $session = ChatSession::where('id', $sessionId)
                 ->where('user_id', Auth::id())
                 ->firstOrFail();
-                
+
             $messages = $session->messages()
                 ->orderBy('created_at')
-                ->get();
-                
-            return response()->json($messages, 200);
+                ->get()
+                ->map(function ($msg) {
+                    return [
+                        'id' => $msg->id,
+                        'chat_session_id' => $msg->chat_session_id,
+                        'user_id' => $msg->user_id,
+                        'text' => $msg->text,
+                        'is_user' => $msg->is_user,
+                        'created_at' => $msg->created_at->toDateTimeString(),
+                        'updated_at' => $msg->updated_at->toDateTimeString(),
+                        'emotional_state' => $msg->emotional_state ?? 'neutral',
+                        'conversation_level' => $msg->conversation_level ?? 'basic',
+                    ];
+                });
+
+            return response()->json([
+                'success' => true,
+                'data' => $messages,
+            ], 200);
         } catch (\Exception $e) {
             Log::error('Error al obtener mensajes: ' . $e->getMessage());
-            return response()->json(['error' => 'Sesión no encontrada'], 404);
+            return response()->json([
+                'success' => false,
+                'error' => 'Sesión no encontrada',
+                'message' => $e->getMessage(),
+            ], 404);
         }
     }
 
-    /**
-     * Enviar mensaje y recibir respuesta (guardado en DB)
-     */
+
+    public function summarizeConversation(Request $request)
+{
+    $request->validate([
+        'messages' => 'required|array',
+        'messages.*.text' => 'required|string',
+        'messages.*.is_user' => 'required|boolean',
+        'messages.*.created_at' => 'required|date',
+        'session_id' => 'nullable|exists:chat_sessions,id',
+        'language' => 'nullable|string|in:es,en,fr,pt',
+    ]);
+
+    $this->initializeService($request);
+
+    try {
+        // Construir el contexto de la conversación
+        $messages = [];
+        foreach ($request->messages as $msg) {
+            $messages[] = [
+                'role' => $msg['is_user'] ? 'user' : 'assistant',
+                'content' => $msg['text'],
+            ];
+        }
+
+        // Agregar un mensaje del sistema para solicitar un resumen
+        $summaryPrompt = $this->getSummaryPrompt($request->language);
+        $messages[] = ['role' => 'system', 'content' => $summaryPrompt];
+
+        // Llamar a OpenAI para generar el resumen
+        $summary = $this->callOpenAIForSummary($messages);
+
+        if (!is_string($summary) || empty($summary)) {
+            Log::warning('Respuesta de OpenAI para resumen inválida, usando mensaje por defecto.');
+            $summary = $this->getDefaultSummary($request->language);
+        }
+
+        return response()->json([
+            'success' => true,
+            'summary' => $summary,
+        ], 200);
+    } catch (\Exception $e) {
+        Log::error('Error al resumir conversación: ' . $e->getMessage());
+        return response()->json([
+            'success' => false,
+            'error' => 'Error al resumir la conversación',
+            'message' => $e->getMessage(),
+        ], 500);
+    }
+}
+
+private function getSummaryPrompt($language)
+{
+    switch ($language) {
+        case 'en':
+            return "Summarize the following conversation in a concise and clear manner, capturing the main topics and emotions expressed. Keep the summary under 100 words.";
+        case 'fr':
+            return "Résumez la conversation suivante de manière concise et claire, en capturant les principaux sujets et émotions exprimés. Gardez le résumé sous 100 mots.";
+        case 'pt':
+            return "Resuma a seguinte conversa de forma concisa e clara, capturando os principais tópicos e emoções expressas. Mantenha o resumo com menos de 100 palavras.";
+        default: // Español
+            return "Resume la siguiente conversación de manera concisa y clara, capturando los temas principales y las emociones expresadas. Mantén el resumen en menos de 100 palabras.";
+    }
+}
+
+private function getDefaultSummary($language)
+{
+    switch ($language) {
+        case 'en':
+            return "The conversation touched on various topics. Let's continue exploring what matters to you.";
+        case 'fr':
+            return "La conversation a abordé divers sujets. Continuons à explorer ce qui vous importe.";
+        case 'pt':
+            return "A conversa abordou vários tópicos. Vamos continuar explorando o que importa para você.";
+        default: // Español
+            return "La conversación abordó varios temas. Sigamos explorando lo que te importa.";
+    }
+}
+
+private function callOpenAIForSummary($messages)
+{
+    try {
+        $response = Http::withHeaders([
+            'Authorization' => 'Bearer ' . env('OPENAI_API_KEY'),
+            'Content-Type' => 'application/json',
+        ])->post('https://api.openai.com/v1/chat/completions', [
+            'model' => 'gpt-4o-mini',
+            'messages' => $messages,
+            'max_tokens' => 100,
+            'temperature' => 0.5,
+        ]);
+
+        if ($response->successful()) {
+            return $response->json()['choices'][0]['message']['content'];
+        }
+
+        Log::error('Error en OpenAI al resumir: ' . $response->body());
+        return null;
+    } catch (\Exception $e) {
+        Log::error('Excepción en OpenAI al resumir: ' . $e->getMessage());
+        return null;
+    }
+}
+
+
+
+    
     public function sendMessage(Request $request)
     {
         $request->validate([
             'message' => 'required|string',
             'session_id' => 'nullable|exists:chat_sessions,id',
-            'is_temporary' => 'boolean'
+            'is_temporary' => 'boolean',
+            'language' => 'nullable|string|in:es,en,fr,pt',
         ]);
-        
+    
+        $this->initializeService($request);
+    
         try {
             $promptData = $this->lumorahService->generatePrompt($request->message);
+            $promptData = array_merge([
+                'emotional_state' => 'neutral',
+                'conversation_level' => 'basic',
+                'system_prompt' => 'Default system prompt',
+            ], $promptData);
+    
             $contextMessages = [];
-            
-            if ($request->session_id) {
+            if ($request->session_id && !$request->is_temporary) {
                 $contextMessages = $this->getConversationContext($request->session_id);
             }
-            
+    
             $aiResponse = $this->callOpenAI($request->message, $promptData, $contextMessages);
-            
-            if (!$request->is_temporary) {
-                DB::transaction(function () use ($request, $aiResponse) {
-                    $sessionId = $request->session_id ?? $this->createNewSession($request->message);
-                    
-                    Message::create([
-                        'chat_session_id' => $sessionId,
-                        'user_id' => Auth::id(),
-                        'text' => $request->message,
-                        'is_user' => true
-                    ]);
-                    
-                    Message::create([
-                        'chat_session_id' => $sessionId,
-                        'user_id' => Auth::id(),
-                        'text' => $aiResponse,
-                        'is_user' => false
-                    ]);
-                });
+            if (!is_string($aiResponse) || empty($aiResponse)) {
+                Log::warning('Respuesta de OpenAI inválida, usando mensaje por defecto.');
+                $aiResponse = 'Lo siento, no pude procesar tu mensaje.';
             }
-            
+    
+            $sessionId = $request->session_id;
+    
+            if ($request->is_temporary) {
+                return response()->json([
+                    'success' => true,
+                    'ai_message' => [
+                        'text' => $aiResponse,
+                        'is_user' => false,
+                        'emotional_state' => $promptData['emotional_state'],
+                        'conversation_level' => $promptData['conversation_level'],
+                    ],
+                    'session_id' => null,
+                ], 200);
+            }
+    
+            DB::transaction(function () use ($request, $aiResponse, &$sessionId, $promptData) {
+                if (!$sessionId) {
+                    $sessionId = $this->createNewSession($request->message);
+                }
+    
+                // Mensaje del usuario
+                Message::create([
+                    'chat_session_id' => $sessionId,
+                    'user_id' => Auth::id(),
+                    'text' => $request->message,
+                    'is_user' => true,
+                    'emotional_state' => $promptData['emotional_state'],
+                    'conversation_level' => $promptData['conversation_level'],
+                ]);
+    
+                // Mensaje de la IA
+                Message::create([
+                    'chat_session_id' => $sessionId,
+                    'user_id' => null, // Cambiado de 0 a null
+                    'text' => $aiResponse,
+                    'is_user' => false,
+                    'emotional_state' => $promptData['emotional_state'],
+                    'conversation_level' => $promptData['conversation_level'],
+                ]);
+            });
+    
             return response()->json([
+                'success' => true,
                 'ai_message' => [
                     'text' => $aiResponse,
                     'is_user' => false,
                     'emotional_state' => $promptData['emotional_state'],
-                    'conversation_level' => $promptData['conversation_level']
+                    'conversation_level' => $promptData['conversation_level'],
                 ],
-                'session_id' => $request->session_id ?? null
+                'session_id' => $sessionId,
             ], 200);
-            
         } catch (\Exception $e) {
             Log::error('Error en sendMessage: ' . $e->getMessage());
             return response()->json([
+                'success' => false,
                 'error' => 'Error al procesar el mensaje',
-                'message' => $e->getMessage()
+                'message' => $e->getMessage(),
             ], 500);
         }
     }
 
-    /**
-     * Mensaje temporal (sin guardar en DB)
-     */
+
     public function sendTemporaryMessage(Request $request)
     {
-        $request->validate(['message' => 'required|string']);
-        
-        $promptData = $this->lumorahService->generatePrompt($request->message);
-        $aiResponse = $this->callOpenAI($request->message, $promptData);
-        
-        return response()->json([
-            'ai_message' => [
-                'text' => $aiResponse,
-                'is_user' => false,
-                'emotional_state' => $promptData['emotional_state'],
-                'conversation_level' => $promptData['conversation_level']
-            ]
-        ], 200);
-    }
-
-    /**
-     * Iniciar nueva conversación con Lumorah
-     */
-    public function startNewSession()
-    {
-        $welcomeMessage = $this->lumorahService->getWelcomeMessage();
-        
-        return response()->json([
-            'ai_message' => [
-                'text' => $welcomeMessage,
-                'is_user' => false,
-                'emotional_state' => 'neutral',
-                'conversation_level' => 'basic',
-                'is_welcome' => true
-            ]
-        ], 200);
-    }
-
-    /**
-     * Actualizar nombre de usuario
-     */
-    public function updateUserName(Request $request)
-    {
-        $request->validate(['name' => 'required|string|max:100']);
-        
-        Auth::user()->update(['name' => $request->name]);
-        $this->lumorahService->setUserName($request->name);
-        
-        return response()->json([
-            'ai_message' => [
-                'text' => "Gracias {$request->name}. Ahora que me conoces, ¿qué te gustaría compartir hoy?",
-                'is_user' => false
-            ]
-        ], 200);
-    }
-
-    /**
-     * Guardar sesión existente
-     */
-    public function saveSession(Request $request, $sessionId)
-    {
         $request->validate([
-            'title' => 'required|string|max:100',
+            'message' => 'required|string',
+            'language' => 'nullable|string|in:es,en,fr,pt',
         ]);
 
+        $this->initializeService($request);
+
         try {
-            $session = ChatSession::where('id', $sessionId)
-                ->where('user_id', Auth::id())
-                ->firstOrFail();
+            $promptData = $this->lumorahService->generatePrompt($request->message);
+            $aiResponse = $this->callOpenAI($request->message, $promptData);
 
-            $session->update([
-                'title' => $request->title,
-                'is_saved' => true,
-            ]);
-
-            return response()->json($session, 200);
+            return response()->json([
+                'success' => true,
+                'ai_message' => [
+                    'text' => $aiResponse,
+                    'is_user' => false,
+                    'emotional_state' => $promptData['emotional_state'],
+                    'conversation_level' => $promptData['conversation_level'],
+                ],
+            ], 200);
         } catch (\Exception $e) {
-            Log::error('Error al guardar sesión: ' . $e->getMessage());
-            return response()->json(['error' => 'Error al guardar la sesión'], 500);
+            Log::error('Error en sendTemporaryMessage: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'error' => 'Error al procesar el mensaje temporal',
+                'message' => $e->getMessage(),
+            ], 500);
+        }
+    } 
+    
+    public function startNewSession(Request $request)
+    {
+        $request->validate([
+            'language' => 'nullable|string|in:es,en,fr,pt',
+        ]);
+    
+        $this->initializeService($request);
+    
+        try {
+            $welcomeMessage = $this->lumorahService->getWelcomeMessage();
+    
+            return response()->json([
+                'success' => true,
+                'ai_message' => [
+                    'text' => $welcomeMessage,
+                    'is_user' => false,
+                    'emotional_state' => 'neutral',
+                    'conversation_level' => 'basic',
+                    'is_welcome' => true,
+                ],
+                'session_id' => null, // No se crea sesión en la base de datos
+            ], 200);
+        } catch (\Exception $e) {
+            Log::error('Error al iniciar sesión: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'error' => 'Error al iniciar la conversación',
+                'message' => $e->getMessage(),
+            ], 500);
         }
     }
 
-    /**
-     * Método callOpenAI (manteniendo nombre exacto)
-     */
+    public function updateUserName(Request $request)
+    {
+        $request->validate([
+            'name' => 'required|string|max:100',
+            'language' => 'nullable|string|in:es,en,fr,pt',
+        ]);
+
+        $this->initializeService($request);
+
+        try {
+            Auth::user()->update(['name' => $request->name]);
+            $this->lumorahService->setUserName($request->name);
+
+            $responseMessage = $this->getUpdateNameResponse($request->language, $request->name);
+
+            return response()->json([
+                'success' => true,
+                'ai_message' => [
+                    'text' => $responseMessage,
+                    'is_user' => false,
+                    'emotional_state' => 'neutral',
+                    'conversation_level' => 'basic',
+                ],
+            ], 200);
+        } catch (\Exception $e) {
+            Log::error('Error al actualizar nombre: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'error' => 'Error al actualizar el nombre',
+                'message' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    private function getUpdateNameResponse($language, $name)
+    {
+        switch ($language) {
+            case 'en':
+                return "Thank you, $name. Now that we know each other better, what would you like to share today?";
+            case 'fr':
+                return "Merci, $name. Maintenant que nous nous connaissons mieux, que souhaitez-vous partager aujourd'hui ?";
+            case 'pt':
+                return "Obrigado, $name. Agora que nos conhecemos melhor, o que você gostaria de compartilhar hoje?";
+            default:
+                return "Gracias, $name. Ahora que nos conocemos mejor, ¿qué te gustaría compartir hoy?";
+        }
+    }
+
     private function callOpenAI($userMessage, $promptData, $context = [])
     {
         try {
             $messages = [
                 ['role' => 'system', 'content' => $promptData['system_prompt']],
-                ['role' => 'user', 'content' => $userMessage]
             ];
-            
+
             foreach ($context as $msg) {
                 $messages[] = [
                     'role' => $msg['is_user'] ? 'user' : 'assistant',
-                    'content' => $msg['text']
+                    'content' => $msg['text'],
                 ];
             }
-            
+
+            $messages[] = ['role' => 'user', 'content' => $userMessage];
+
             $response = Http::withHeaders([
                 'Authorization' => 'Bearer ' . env('OPENAI_API_KEY'),
                 'Content-Type' => 'application/json',
             ])->post('https://api.openai.com/v1/chat/completions', [
-                'model' => 'gpt-4o-mini', // Manteniendo modelo exacto
+                'model' => 'gpt-4o-mini',
                 'messages' => $messages,
                 'max_tokens' => 250,
                 'temperature' => 0.7,
             ]);
-            
+
             if ($response->successful()) {
-                return $response->json()['choices'][0]['message']['content'];
+                $content = $response->json()['choices'][0]['message']['content'];
+                if (stripos($content, 'cariño') !== false || stripos($content, 'amor') !== false) {
+                    return 'Estoy contigo… ¿cómo quieres seguir explorando esto?';
+                }
+                return $content;
             }
-            
+
             Log::error('Error en OpenAI: ' . $response->body());
-            return 'Lo siento, estoy teniendo dificultades. ¿Podríamos intentarlo de nuevo?';
-            
+            return 'Lo siento, estoy teniendo dificultades para responder. ¿Podemos intentarlo de nuevo?';
         } catch (\Exception $e) {
             Log::error('Excepción en OpenAI: ' . $e->getMessage());
             return 'Estoy procesando tu mensaje. Por favor, ten paciencia...';
         }
     }
-    
+
     protected function getConversationContext($sessionId)
     {
         return Message::where('chat_session_id', $sessionId)
@@ -341,24 +572,24 @@ class ChatController extends Controller
                 return [
                     'text' => $msg->text,
                     'is_user' => $msg->is_user,
-                    'created_at' => $msg->created_at
+                    'created_at' => $msg->created_at,
                 ];
             })
             ->reverse()
             ->toArray();
     }
-    
+
     protected function createNewSession($firstMessage)
     {
         $session = ChatSession::create([
             'user_id' => Auth::id(),
             'title' => $this->generateSessionTitle($firstMessage),
-            'is_saved' => false
+            'is_saved' => false,
         ]);
-        
+
         return $session->id;
     }
-    
+
     protected function generateSessionTitle($message)
     {
         $words = str_word_count($message, 1);

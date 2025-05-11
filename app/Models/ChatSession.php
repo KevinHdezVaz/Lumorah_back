@@ -3,10 +3,11 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class ChatSession extends Model
 {
-    use HasFactory;
+    use HasFactory, SoftDeletes;
 
     /**
      * Los atributos que son asignables en masa.
@@ -14,10 +15,11 @@ class ChatSession extends Model
      * @var array
      */
     protected $fillable = [
-        'user_id', 
+        'user_id',
         'title',
-         'created_at',
-        'updated_at'
+        'is_saved',
+        'created_at',
+        'updated_at',
     ];
 
     /**
@@ -29,8 +31,10 @@ class ChatSession extends Model
         'id',
         'user_id',
         'title',
-         'created_at',
-        'updated_at'
+        'is_saved',
+        'created_at',
+        'updated_at',
+        'deleted_at',
     ];
 
     /**
@@ -39,22 +43,23 @@ class ChatSession extends Model
      * @var array
      */
     protected $casts = [
-         'created_at' => 'datetime',
-        'updated_at' => 'datetime'
+        'is_saved' => 'boolean',
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime',
+        'deleted_at' => 'datetime',
     ];
 
     /**
-     * Valor por defecto para los atributos.
-     *
-     * @var array
+     * Relación con los mensajes.
      */
-  
-
     public function messages()
     {
         return $this->hasMany(Message::class);
     }
 
+    /**
+     * Relación con el usuario.
+     */
     public function user()
     {
         return $this->belongsTo(User::class);
