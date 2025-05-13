@@ -506,6 +506,51 @@ private function callOpenAIForSummary($messages)
         }
     }
 
+
+    public function transcribeAudio(Request $request)
+{
+    $request->validate([
+        'audio' => 'required|file|mimes:mp3,m4a,webm,wav,ogg|max:10240', // max 10MB
+    ]);
+
+    try {
+        $file = $request->file('audio');
+        $response = Http::withHeaders([
+            'Authorization' => 'Bearer ' . env('OPENAI_API_KEY'),
+        ])->attach(
+            'file', file_get_contents($file->getRealPath()), $file->getClientOriginalName()
+        )->asMultipart()->post('https://api.openai.com/v1/audio/transcriptions', [
+            [
+                'name' => 'model',
+                'contents' => 'whisper-1'
+            ],
+            [
+                'name' => 'language',
+                'contents' => 'es' // Puedes hacer esto dinámico
+            ],
+        ]);
+
+        if ($response->successful()) {
+            return response()->json([
+                'success' => true,
+                'text' => $response['text']
+            ]);
+        }
+
+        Log::error('Whisper error: ' . $response->body());
+        return response()->json(['success' => false, 'error' => 'Error al transcribir el audio.'], 500);
+    } catch (\Exception $e) {
+        Log::error('Excepción al transcribir: ' . $e->getMessage());
+        return response()->json([
+            'success' => false,
+            'error' => 'Excepción al procesar el audio.',
+            'message' => $e->getMessage()
+        ], 500);
+    }
+}
+
+
+
     private function getUpdateNameResponse($language, $name)
     {
         switch ($language) {

@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use Kreait\Firebase\Contract\Auth as FirebaseAuth; // Usa el namespace correcto
+use App\Notifications\WelcomeEmailNotification;
 
 class AuthController extends Controller
 {
@@ -102,6 +103,12 @@ class AuthController extends Controller
                 'email' => $request->email,
                 'password' => Hash::make($request->password),
             ]);
+            
+            \Log::info('Enviando correo de bienvenida a ' . $user->email);
+
+            $user->notify(new WelcomeEmailNotification());
+
+            
             
             // Cambia esta parte para obtener solo el token plain text
             $tokenResult = $user->createToken('auth_token');
