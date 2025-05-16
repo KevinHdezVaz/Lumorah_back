@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Http\Controllers;
 
 use App\Models\Message;
@@ -38,7 +39,6 @@ class ChatController extends Controller
             $query = ChatSession::where('user_id', Auth::id())
                 ->orderBy('created_at', 'desc');
 
-            // Filtrar por sesiones guardadas si se especifica
             if ($request->query('saved', true)) {
                 $query->where('is_saved', true);
             }
@@ -115,7 +115,6 @@ class ChatController extends Controller
             $sessionId = $request->session_id;
 
             if ($sessionId) {
-                // Actualizar sesión existente
                 $session = ChatSession::where('id', $sessionId)
                     ->where('user_id', $userId)
                     ->firstOrFail();
@@ -124,7 +123,6 @@ class ChatController extends Controller
                     'is_saved' => true,
                 ]);
             } else {
-                // Crear nueva sesión
                 $session = ChatSession::create([
                     'user_id' => $userId,
                     'title' => $request->title,
@@ -132,16 +130,14 @@ class ChatController extends Controller
                 ]);
             }
 
-            // Eliminar mensajes existentes si es una sesión existente
             if ($sessionId) {
                 Message::where('chat_session_id', $sessionId)->delete();
             }
 
-            // Guardar mensajes
             foreach ($request->messages as $msg) {
                 Message::create([
                     'chat_session_id' => $session->id,
-'user_id' => $msg['is_user'] ? $userId : null, // Cambiado de 0 a null
+                    'user_id' => $msg['is_user'] ? $userId : null,
                     'text' => $msg['text'],
                     'is_user' => $msg['is_user'],
                     'created_at' => $msg['created_at'],
@@ -210,112 +206,105 @@ class ChatController extends Controller
         }
     }
 
-
     public function summarizeConversation(Request $request)
-{
-    $request->validate([
-        'messages' => 'required|array',
-        'messages.*.text' => 'required|string',
-        'messages.*.is_user' => 'required|boolean',
-        'messages.*.created_at' => 'required|date',
-        'session_id' => 'nullable|exists:chat_sessions,id',
-        'language' => 'nullable|string|in:es,en,fr,pt',
-    ]);
-
-    $this->initializeService($request);
-
-    try {
-        // Construir el contexto de la conversación
-        $messages = [];
-        foreach ($request->messages as $msg) {
-            $messages[] = [
-                'role' => $msg['is_user'] ? 'user' : 'assistant',
-                'content' => $msg['text'],
-            ];
-        }
-
-        // Agregar un mensaje del sistema para solicitar un resumen
-        $summaryPrompt = $this->getSummaryPrompt($request->language);
-        $messages[] = ['role' => 'system', 'content' => $summaryPrompt];
-
-        // Llamar a OpenAI para generar el resumen
-        $summary = $this->callOpenAIForSummary($messages);
-
-        if (!is_string($summary) || empty($summary)) {
-            Log::warning('Respuesta de OpenAI para resumen inválida, usando mensaje por defecto.');
-            $summary = $this->getDefaultSummary($request->language);
-        }
-
-        return response()->json([
-            'success' => true,
-            'summary' => $summary,
-        ], 200);
-    } catch (\Exception $e) {
-        Log::error('Error al resumir conversación: ' . $e->getMessage());
-        return response()->json([
-            'success' => false,
-            'error' => 'Error al resumir la conversación',
-            'message' => $e->getMessage(),
-        ], 500);
-    }
-}
-
-private function getSummaryPrompt($language)
-{
-    switch ($language) {
-        case 'en':
-            return "Summarize the following conversation in a concise and clear manner, capturing the main topics and emotions expressed. Keep the summary under 100 words.";
-        case 'fr':
-            return "Résumez la conversation suivante de manière concise et claire, en capturant les principaux sujets et émotions exprimés. Gardez le résumé sous 100 mots.";
-        case 'pt':
-            return "Resuma a seguinte conversa de forma concisa e clara, capturando os principais tópicos e emoções expressas. Mantenha o resumo com menos de 100 palavras.";
-        default: // Español
-            return "Resume la siguiente conversación de manera concisa y clara, capturando los temas principales y las emociones expresadas. Mantén el resumen en menos de 100 palabras.";
-    }
-}
-
-private function getDefaultSummary($language)
-{
-    switch ($language) {
-        case 'en':
-            return "The conversation touched on various topics. Let's continue exploring what matters to you.";
-        case 'fr':
-            return "La conversation a abordé divers sujets. Continuons à explorer ce qui vous importe.";
-        case 'pt':
-            return "A conversa abordou vários tópicos. Vamos continuar explorando o que importa para você.";
-        default: // Español
-            return "La conversación abordó varios temas. Sigamos explorando lo que te importa.";
-    }
-}
-
-private function callOpenAIForSummary($messages)
-{
-    try {
-        $response = Http::withHeaders([
-            'Authorization' => 'Bearer ' . env('OPENAI_API_KEY'),
-            'Content-Type' => 'application/json',
-        ])->post('https://api.openai.com/v1/chat/completions', [
-            'model' => 'gpt-4o-mini',
-            'messages' => $messages,
-            'max_tokens' => 100,
-            'temperature' => 0.5,
+    {
+        $request->validate([
+            'messages' => 'required|array',
+            'messages.*.text' => 'required|string',
+            'messages.*.is_user' => 'required|boolean',
+            'messages.*.created_at' => 'required|date',
+            'session_id' => 'nullable|exists:chat_sessions,id',
+            'language' => 'nullable|string|in:es,en,fr,pt',
         ]);
 
-        if ($response->successful()) {
-            return $response->json()['choices'][0]['message']['content'];
+        $this->initializeService($request);
+
+        try {
+            $messages = [];
+            foreach ($request->messages as $msg) {
+                $messages[] = [
+                    'role' => $msg['is_user'] ? 'user' : 'assistant',
+                    'content' => $msg['text'],
+                ];
+            }
+
+            $summaryPrompt = $this->getSummaryPrompt($request->language);
+            $messages[] = ['role' => 'system', 'content' => $summaryPrompt];
+
+            $summary = $this->callOpenAIForSummary($messages);
+
+            if (!is_string($summary) || empty($summary)) {
+                Log::warning('Respuesta de OpenAI para resumen inválida, usando mensaje por defecto.');
+                $summary = $this->getDefaultSummary($request->language);
+            }
+
+            return response()->json([
+                'success' => true,
+                'summary' => $summary,
+            ], 200);
+        } catch (\Exception $e) {
+            Log::error('Error al resumir conversación: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'error' => 'Error al resumir la conversación',
+                'message' => $e->getMessage(),
+            ], 500);
         }
-
-        Log::error('Error en OpenAI al resumir: ' . $response->body());
-        return null;
-    } catch (\Exception $e) {
-        Log::error('Excepción en OpenAI al resumir: ' . $e->getMessage());
-        return null;
     }
-}
 
+    private function getSummaryPrompt($language)
+    {
+        switch ($language) {
+            case 'en':
+                return "Summarize the following conversation in a concise and clear manner, capturing the main topics and emotions expressed. Keep the summary under 100 words.";
+            case 'fr':
+                return "Résumez la conversation suivante de manière concise et claire, en capturant les principaux sujets et émotions exprimés. Gardez le résumé sous 100 mots.";
+            case 'pt':
+                return "Resuma a seguinte conversa de forma concisa e clara, capturando os principais tópicos e emociones expressas. Mantenha o resumo com menos de 100 palavras.";
+            default:
+                return "Resume la siguiente conversación de manera concisa y clara, capturando los temas principales y las emociones expresadas. Mantén el resumen en menos de 100 palabras.";
+        }
+    }
 
+    private function getDefaultSummary($language)
+    {
+        switch ($language) {
+            case 'en':
+                return "The conversation touched on various topics. Let's continue exploring what matters to you.";
+            case 'fr':
+                return "La conversation a abordé divers sujets. Continuons à explorer ce qui vous importe.";
+            case 'pt':
+                return "A conversa abordou vários tópicos. Vamos continuar explorando o que importa para você.";
+            default:
+                return "La conversación abordó varios temas. Sigamos explorando lo que te importa.";
+        }
+    }
 
-    
+    private function callOpenAIForSummary($messages)
+    {
+        try {
+            $response = Http::withHeaders([
+                'Authorization' => 'Bearer ' . env('OPENAI_API_KEY'),
+                'Content-Type' => 'application/json',
+            ])->post('https://api.openai.com/v1/chat/completions', [
+                'model' => 'gpt-4o-mini',
+                'messages' => $messages,
+                'max_tokens' => 100,
+                'temperature' => 0.5,
+            ]);
+
+            if ($response->successful()) {
+                return $response->json()['choices'][0]['message']['content'];
+            }
+
+            Log::error('Error en OpenAI al resumir: ' . $response->body());
+            return null;
+        } catch (\Exception $e) {
+            Log::error('Excepción en OpenAI al resumir: ' . $e->getMessage());
+            return null;
+        }
+    }
+
     public function sendMessage(Request $request)
     {
         $request->validate([
@@ -324,30 +313,30 @@ private function callOpenAIForSummary($messages)
             'is_temporary' => 'boolean',
             'language' => 'nullable|string|in:es,en,fr,pt',
         ]);
-    
+
         $this->initializeService($request);
-    
+
         try {
             $promptData = $this->lumorahService->generatePrompt($request->message);
             $promptData = array_merge([
                 'emotional_state' => 'neutral',
                 'conversation_level' => 'basic',
-                'system_prompt' => 'Default system prompt',
+                'system_prompt' => 'Eres un asistente amigable que responde de manera breve, natural y conversacional, como en una plática entre amigos. Limita tu respuesta a 30 palabras.',
             ], $promptData);
-    
+
             $contextMessages = [];
             if ($request->session_id && !$request->is_temporary) {
                 $contextMessages = $this->getConversationContext($request->session_id);
             }
-    
+
             $aiResponse = $this->callOpenAI($request->message, $promptData, $contextMessages);
             if (!is_string($aiResponse) || empty($aiResponse)) {
                 Log::warning('Respuesta de OpenAI inválida, usando mensaje por defecto.');
                 $aiResponse = 'Lo siento, no pude procesar tu mensaje.';
             }
-    
+
             $sessionId = $request->session_id;
-    
+
             if ($request->is_temporary) {
                 return response()->json([
                     'success' => true,
@@ -360,13 +349,12 @@ private function callOpenAIForSummary($messages)
                     'session_id' => null,
                 ], 200);
             }
-    
+
             DB::transaction(function () use ($request, $aiResponse, &$sessionId, $promptData) {
                 if (!$sessionId) {
                     $sessionId = $this->createNewSession($request->message);
                 }
-    
-                // Mensaje del usuario
+
                 Message::create([
                     'chat_session_id' => $sessionId,
                     'user_id' => Auth::id(),
@@ -375,18 +363,17 @@ private function callOpenAIForSummary($messages)
                     'emotional_state' => $promptData['emotional_state'],
                     'conversation_level' => $promptData['conversation_level'],
                 ]);
-    
-                // Mensaje de la IA
+
                 Message::create([
                     'chat_session_id' => $sessionId,
-                    'user_id' => null, // Cambiado de 0 a null
+                    'user_id' => null,
                     'text' => $aiResponse,
                     'is_user' => false,
                     'emotional_state' => $promptData['emotional_state'],
                     'conversation_level' => $promptData['conversation_level'],
                 ]);
             });
-    
+
             return response()->json([
                 'success' => true,
                 'ai_message' => [
@@ -406,7 +393,6 @@ private function callOpenAIForSummary($messages)
             ], 500);
         }
     }
-
 
     public function sendTemporaryMessage(Request $request)
     {
@@ -507,49 +493,6 @@ private function callOpenAIForSummary($messages)
     }
 
 
-    public function transcribeAudio(Request $request)
-{
-    $request->validate([
-        'audio' => 'required|file|mimes:mp3,m4a,webm,wav,ogg|max:10240', // max 10MB
-    ]);
-
-    try {
-        $file = $request->file('audio');
-        $response = Http::withHeaders([
-            'Authorization' => 'Bearer ' . env('OPENAI_API_KEY'),
-        ])->attach(
-            'file', file_get_contents($file->getRealPath()), $file->getClientOriginalName()
-        )->asMultipart()->post('https://api.openai.com/v1/audio/transcriptions', [
-            [
-                'name' => 'model',
-                'contents' => 'whisper-1'
-            ],
-            [
-                'name' => 'language',
-                'contents' => 'es' // Puedes hacer esto dinámico
-            ],
-        ]);
-
-        if ($response->successful()) {
-            return response()->json([
-                'success' => true,
-                'text' => $response['text']
-            ]);
-        }
-
-        Log::error('Whisper error: ' . $response->body());
-        return response()->json(['success' => false, 'error' => 'Error al transcribir el audio.'], 500);
-    } catch (\Exception $e) {
-        Log::error('Excepción al transcribir: ' . $e->getMessage());
-        return response()->json([
-            'success' => false,
-            'error' => 'Excepción al procesar el audio.',
-            'message' => $e->getMessage()
-        ], 500);
-    }
-}
-
-
 
     private function getUpdateNameResponse($language, $name)
     {
@@ -564,6 +507,7 @@ private function callOpenAIForSummary($messages)
                 return "Gracias, $name. Ahora que nos conocemos mejor, ¿qué te gustaría compartir hoy?";
         }
     }
+
 
     private function callOpenAI($userMessage, $promptData, $context = [])
     {
@@ -585,7 +529,7 @@ private function callOpenAIForSummary($messages)
                 'Authorization' => 'Bearer ' . env('OPENAI_API_KEY'),
                 'Content-Type' => 'application/json',
             ])->post('https://api.openai.com/v1/chat/completions', [
-                'model' => 'gpt-4o-mini',
+                'model' => 'gpt-3.5-turbo', // Cambiado a GPT-3.5
                 'messages' => $messages,
                 'max_tokens' => 250,
                 'temperature' => 0.7,
@@ -641,4 +585,5 @@ private function callOpenAIForSummary($messages)
         $relevantWords = array_slice($words, 0, 5);
         return 'Conversación: ' . implode(' ', $relevantWords) . '...';
     }
+ 
 }

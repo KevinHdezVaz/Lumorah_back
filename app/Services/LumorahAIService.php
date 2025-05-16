@@ -25,8 +25,22 @@ class LumorahAIService
     public function generatePrompt($userMessage)
     {
         $this->analyzeUserInput($userMessage);
+        
+        $basePrompt = "You are Lumorah.AI, a therapeutic AI. Respond in " . $this->userLanguage . " with: "
+            . "1. Empathy and validation\n"
+            . "2. Non-judgmental tone\n"
+            . "3. Emotional state awareness (" . $this->emotionalState . ")\n"
+            . "4. " . $this->conversationLevel . " level conversation\n\n";
+        
+        $languageSpecific = [
+            'es' => "Usa español natural con modismos comunes. Sé cálido pero profesional.",
+            'en' => "Use natural English with common idioms. Be warm but professional.",
+            'fr' => "Utilisez un français naturel avec des expressions courantes. Soyez chaleureux mais professionnel.",
+            'pt' => "Use português natural com expressões comuns. Seja acolhedor mas profissional."
+        ];
+        
         return [
-            'system_prompt' => $this->getSystemPrompt(),
+            'system_prompt' => $basePrompt . ($languageSpecific[$this->userLanguage] ?? $languageSpecific['es']),
             'user_prompt' => $userMessage,
             'emotional_state' => $this->emotionalState,
             'conversation_level' => $this->conversationLevel

@@ -24,8 +24,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/summarize', [ChatController::class, 'summarizeConversation']);
     
     Route::prefix('chat')->group(function () {
-        Route::post('/transcribe-audio', [ChatController::class, 'transcribeAudio']);
-
         Route::get('/sessions', [ChatController::class, 'getSessions']);
         Route::post('/sessions', [ChatController::class, 'saveChatSession']);
         Route::put('/sessions/{session}', [ChatController::class, 'saveSession']);
