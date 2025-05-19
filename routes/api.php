@@ -10,6 +10,7 @@ Route::post('/login', [AuthController::class, 'login']);
 Route::post('/check-email', [AuthController::class, 'checkEmail']);
 Route::post('/check-phone', [AuthController::class, 'checkPhone']);
 Route::post('/google-login', [AuthController::class, 'googleLogin']);
+Route::post('/facebook-login', [AuthController::class, 'facebookLogin']);
 
 // Rutas de Google
 Route::get('/auth/google', [AuthController::class, 'redirectToGoogle']);
@@ -24,6 +25,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/summarize', [ChatController::class, 'summarizeConversation']);
     
     Route::prefix('chat')->group(function () {
+        Route::post('/transcribe-audio', [ChatController::class, 'transcribeAudio']);
+        Route::post('/process-audio', [ChatController::class, 'processAudio']); // Solo esta ruta
         Route::get('/sessions', [ChatController::class, 'getSessions']);
         Route::post('/sessions', [ChatController::class, 'saveChatSession']);
         Route::put('/sessions/{session}', [ChatController::class, 'saveSession']);

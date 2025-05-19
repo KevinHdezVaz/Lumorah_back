@@ -10,17 +10,28 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
 use App\Services\LumorahAIService;
+use Pusher\Pusher;  // ✅ Correcto
+
 
 class ChatController extends Controller
 {
     protected $lumorahService;
     protected $supportedLanguages = ['es', 'en', 'fr', 'pt'];
-
-    public function __construct()
+    
+    
+public function __construct()
     {
         $this->middleware('auth:sanctum');
+        $this->pusher = new Pusher(
+            env('PUSHER_APP_KEY'),
+            env('PUSHER_APP_SECRET'),
+            env('PUSHER_APP_ID'),
+            [
+                'cluster' => env('PUSHER_APP_CLUSTER'),
+                'useTLS' => true,
+            ]
+        );
     }
-
     private function initializeService(Request $request)
     {
         $language = $request->input('language', 'es');
@@ -69,7 +80,51 @@ class ChatController extends Controller
             ], 500);
         }
     }
+   
+    public function processAudio(Request $request)
+    {
+        Log::info('Solicitud recibida en processAudio', [
+            'user_id' => Auth::id(),
+            'audio_file' => $request->hasFile('audio') ? $request->file('audio')->getClientOriginalName() : 'No file',
+        ]);
 
+        if ($request->hasFile('audio')) {
+            $audio = $request->file('audio');
+            Log::info('Archivo recibido: ' . $audio->getClientOriginalName());
+            Log::info('Tipo MIME detectado por el servidor: ' . $audio->getMimeType());
+
+            $request->validate([
+                'audio' => 'required|file|mimetypes:audio/m4a,audio/mp4,audio/aac,audio/wav,audio/mpeg,video/mp4|max:25600',
+            ]);
+
+            try {
+                $audioPath = $audio->getPathname();
+                Log::info('Procesando audio: ' . $audioPath);
+
+                // Opcional: Guardar el audio en el servidor si lo necesitas
+                // $audio->store('audio_files'); // Ejemplo de almacenamiento
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Audio recibido correctamente',
+                ], 200);
+            } catch (\Exception $e) {
+                Log::error('Excepción al procesar audio: ' . $e->getMessage());
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Error al procesar el audio',
+                    'message' => $e->getMessage(),
+                ], 500);
+            }
+        }
+
+        return response()->json([
+            'success' => false,
+            'error' => 'No se proporcionó un archivo de audio',
+        ], 400);
+    }
+
+    
     public function deleteSession($sessionId)
     {
         DB::beginTransaction();
@@ -529,7 +584,7 @@ class ChatController extends Controller
                 'Authorization' => 'Bearer ' . env('OPENAI_API_KEY'),
                 'Content-Type' => 'application/json',
             ])->post('https://api.openai.com/v1/chat/completions', [
-                'model' => 'gpt-3.5-turbo', // Cambiado a GPT-3.5
+                'model' => 'gpt-4o-mini', // Cambiado a GPT-3.5
                 'messages' => $messages,
                 'max_tokens' => 250,
                 'temperature' => 0.7,
