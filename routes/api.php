@@ -23,8 +23,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::post('/update-name', [ChatController::class, 'updateUserName']);
     Route::post('/summarize', [ChatController::class, 'summarizeConversation']);
+
+ 
     
     Route::prefix('chat')->group(function () {
+
+        Route::post('/send-voice-message', [ChatController::class, 'sendVoiceMessage']);
         Route::post('/transcribe-audio', [ChatController::class, 'transcribeAudio']);
         Route::post('/process-audio', [ChatController::class, 'processAudio']); // Solo esta ruta
         Route::get('/sessions', [ChatController::class, 'getSessions']);

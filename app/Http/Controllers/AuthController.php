@@ -31,106 +31,105 @@ class AuthController extends Controller
     }
 
 
-    
     public function facebookLogin(Request $request)
-{
-    try {
-        $validator = Validator::make($request->all(), [
-            'id_token' => 'required|string',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'errors' => $validator->errors()
-            ], 422);
-        }
-
-        $idToken = $request->input('id_token');
-        
-        \Log::info("Token Facebook recibido: " . substr($idToken, 0, 30) . "...");
-
-        $verifiedIdToken = $this->firebaseAuth->verifyIdToken($idToken, true);
-        $claims = $verifiedIdToken->claims();
-        
-        $firebaseUid = $claims->get('sub');
-        $email = $claims->get('email');
-        $name = $claims->get('name') ?? 'Usuario Facebook';
-
-        // Verificar que el proveedor sea Facebook
-        $signInProvider = $claims->get('firebase')['sign_in_provider'] ?? '';
-        if ($signInProvider !== 'facebook.com') {
-            throw new \Exception("Token no emitido por Facebook");
-        }
-
-        $user = Usuario::firstOrCreate(
-            ['email' => $email],
-            [
-                'nombre' => $name,
-                'password' => Hash::make(uniqid()),
-                'firebase_uid' => $firebaseUid,
-                'auth_provider' => 'facebook'
-            ]
-        );
-
-        $token = $user->createToken('auth_token')->plainTextToken;
-
-        return response()->json([
-            'success' => true,
-            'user' => $user,
-            'token' => $token,
-        ]);
-
-    } catch (\Exception $e) {
-        \Log::error("Error en facebookLogin: " . $e->getMessage());
-        return response()->json([
-            'success' => false,
-            'message' => 'Error en autenticación con Facebook',
-            'error' => $e->getMessage(),
-        ], 401);
-    }
-}
-
-
-    public function googleLogin(Request $request)
     {
         try {
-            // Validación del token
             $validator = Validator::make($request->all(), [
                 'id_token' => 'required|string',
             ]);
-
+    
             if ($validator->fails()) {
                 return response()->json([
                     'success' => false,
                     'errors' => $validator->errors()
                 ], 422);
             }
+    
+            $idToken = $request->input('id_token');
+            
+            \Log::info("Token Facebook recibido: " . substr($idToken, 0, 30) . "...");
+    
+            $verifiedIdToken = $this->firebaseAuth->verifyIdToken($idToken, true);
+            $claims = $verifiedIdToken->claims();
+            
+            $firebaseUid = $claims->get('sub');
+            $email = $claims->get('email');
+            $name = $claims->get('name') ?? 'Usuario Facebook';
+    
+            // Verificar que el proveedor sea Facebook
+            $signInProvider = $claims->get('firebase')['sign_in_provider'] ?? '';
+            if ($signInProvider !== 'facebook.com') {
+                throw new \Exception("Token no emitido por Facebook");
+            }
+    
+            $user = Usuario::firstOrCreate(
+                ['email' => $email],
+                [
+                    'nombre' => $name,
+                    'password' => Hash::make(uniqid()),
+                    'firebase_uid' => $firebaseUid,
+                    'auth_provider' => 'facebook'
+                ]
+            );
+    
+            // Enviar email de bienvenida solo si es un nuevo usuario
+            if ($user->wasRecentlyCreated) {
+                \Log::info('Enviando correo de bienvenida a usuario Facebook: ' . $email);
+                $user->notify(new WelcomeEmailNotification());
+            }
+    
+            $token = $user->createToken('auth_token')->plainTextToken;
+    
+            return response()->json([
+                'success' => true,
+                'user' => $user,
+                'token' => $token,
+            ]);
+    
+        } catch (\Exception $e) {
+            \Log::error("Error en facebookLogin: " . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error en autenticación con Facebook',
+                'error' => $e->getMessage(),
+            ], 401);
+        }
+    }
 
+    public function googleLogin(Request $request)
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'id_token' => 'required|string',
+            ]);
+    
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+    
             $idToken = $request->input('id_token');
             
             \Log::info("Token recibido: " . substr($idToken, 0, 30) . "...");
-
+    
             try {
-                // Verificación del token con Firebase
                 $verifiedIdToken = $this->firebaseAuth->verifyIdToken($idToken, true);
                 $claims = $verifiedIdToken->claims();
                 
-                // Información del usuario
                 $firebaseUid = $claims->get('sub');
                 $email = $claims->get('email');
                 $name = $claims->get('name') ?? 'Usuario Google';
                 $audience = $claims->get('aud');
-
-                // Debug: información completa del token
+    
                 \Log::info("Token decodificado:", [
                     'issuer' => $claims->get('iss'),
                     'audience' => $audience,
                     'email' => $email,
                     'firebase_uid' => $firebaseUid
                 ]);
-
-                // Verificación del audience
+    
                 $serviceAccount = json_decode(file_get_contents(
                     storage_path('app/firebase/lumorah-765ad-firebase-adminsdk-fbsvc-8c924161ee.json')
                 ), true);
@@ -140,15 +139,14 @@ class AuthController extends Controller
                 if (!$expectedAudience) {
                     throw new \Exception("Project ID no configurado en service account");
                 }
-
-                // Manejo de audience como array o string
+    
                 $audienceMatch = false;
                 if (is_array($audience)) {
                     $audienceMatch = in_array($expectedAudience, $audience);
                 } else {
                     $audienceMatch = ($audience === $expectedAudience);
                 }
-
+    
                 if (!$audienceMatch) {
                     throw new \Exception(sprintf(
                         "Audience no coincide. Esperado: %s, Recibido: %s",
@@ -156,20 +154,25 @@ class AuthController extends Controller
                         is_array($audience) ? json_encode($audience) : $audience
                     ));
                 }
-
-                // Buscar o crear usuario
+    
                 $user = Usuario::firstOrCreate(
                     ['email' => $email],
                     [
                         'nombre' => $name,
                         'password' => Hash::make(uniqid()),
                         'firebase_uid' => $firebaseUid,
+                        'auth_provider' => 'google'
                     ]
                 );
-
-                // Generar token de acceso
+    
+                // Enviar email de bienvenida solo si es un nuevo usuario
+                if ($user->wasRecentlyCreated) {
+                    \Log::info('Enviando correo de bienvenida a usuario Google: ' . $email);
+                    $user->notify(new WelcomeEmailNotification());
+                }
+    
                 $token = $user->createToken('auth_token')->plainTextToken;
-
+    
                 return response()->json([
                     'success' => true,
                     'user' => [
@@ -179,7 +182,7 @@ class AuthController extends Controller
                     ],
                     'token' => $token,
                 ]);
-
+    
             } catch (\Throwable $e) {
                 \Log::error("Error al verificar token:", [
                     'error' => $e->getMessage(),
@@ -193,7 +196,7 @@ class AuthController extends Controller
                     'error' => $e->getMessage(),
                 ], 401);
             }
-
+    
         } catch (\Exception $e) {
             \Log::error("Error general en googleLogin: " . $e->getMessage());
             return response()->json([
@@ -203,8 +206,6 @@ class AuthController extends Controller
             ], 500);
         }
     }
-
-
     
 private function decodeTokenHeader($token)
 {
@@ -315,9 +316,13 @@ private function decodeTokenHeader($token)
         ], 200);
     }
 
+  
+
     public function logout(Request $request)
-    {
-        $request->user()->token()->revoke();
-        return response()->json(['message' => 'Sesión cerrada correctamente'], 200);
-    }
+{
+    // Revocar el token actual del usuario
+    $request->user()->currentAccessToken()->delete();
+    
+    return response()->json(['message' => 'Sesión cerrada correctamente'], 200);
+}
 }
